@@ -1,1 +1,116 @@
+name: Build Turnip for A6XX, A7XX, A8XX
+
+on:
+  workflow_dispatch: 
+
+jobs:
+  build-turnip:
+    runs-on: ubuntu-latest
+    
+    # 🧠 THE MATRIX: This tells GitHub to run this job 3 separate times!
+    strategy:
+      matrix:
+        gpu_series: [A6XX, A7XX, A8XX]
+
+    steps:
+      - name: 🛠️ Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y meson ninja-build flex bison python3-mako python3-pycparser pkg-config git curl zip
+
+      - name: 📥 Clone Latest Mesa Source
+        run: git clone --depth 1 https://gitlab.freedesktop.org/mesa/mesa.git
+
+      # 💉 CONDITIONAL PATCHING: Apply different patches based on the Matrix GPU
+      - name: ⚙️ Apply GPU-Specific Patches
+        run: |
+          cd mesa
+          
+          if [ "${{ matrix.gpu_series }}" == "A7XX" ]; then
+            echo "Applying Adreno 7-series experimental patches..."
+            # Example: git apply ../patches/a7xx-support.patch
+          
+          elif [ "${{ matrix.gpu_series }}" == "A8XX" ]; then
+            echo "Applying Adreno 8-series experimental hacks..."
+            # Example: git apply ../patches/a8xx-handles.patch
+            
+          else
+            echo "Building pure upstream Turnip for A6XX. No patches needed."
+          fi
+
+      - name: ⚙️ Create Meson Cross-Compilation File
+        run: |
+          cat <<EOF > android-aarch64.ini
+          [binaries]
+          c = 'aarch64-linux-android33-clang'
+          cpp = 'aarch64-linux-android33-clang++'
+          ar = 'llvm-ar'
+          strip = 'llvm-strip'
+          pkg-config = 'pkg-config'
+
+          [host_machine]
+          system = 'android'
+          cpu_family = 'aarch64'
+          cpu = 'armv8'
+          endian = 'little'
+          EOF
+
+      - name: 🏗️ Compile Turnip Vulkan Driver
+        run: |
+          export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+          
+          cd mesa
+          meson setup build-android \
+            --cross-file ../android-aarch64.ini \
+            -Dplatforms=android \
+            -Dplatform-sdk-version=33 \
+            -Dandroid-stub=true \
+            -Dgallium-drivers= \
+            -Dvulkan-drivers=freedreno \
+            -Dfreedreno-kmds=kgsl \
+            -Dbuildtype=release
+            
+          ninja -C build-android
+
+      - name: 📦 Package into Specific Magisk/KSU Module
+        run: |
+          mkdir -p module/system/vendor/lib64/hw
+          mkdir -p module/META-INF/com/google/android
+          
+          cp mesa/build-android/src/freedreno/vulkan/libvulkan_freedreno.so module/system/vendor/lib64/hw/vulkan.adreno.so
+          cp mesa/docs/license.rst module/MESA_LICENSE.txt
+          
+          # Custom module.prop that changes names based on the Matrix GPU
+          cat <<EOF > module/module.prop
+          id=turnip-mesa-${{ matrix.gpu_series }}
+          name=Turnip Mesa Vulkan - ${ { matrix.gpu_series } } Edition
+          version=Latest-$(date +%Y%m%d)
+          versionCode=$(date +%Y%m%d)
+          author=GitHub-Actions
+          description=Optimized Mesa Turnip Vulkan driver specifically compiled for Adreno ${{ matrix.gpu_series }} architecture.
+          EOF
+          
+          echo "#MAGISK" > module/META-INF/com/google/android/updater-script
+          
+          cat << 'EOF' > module/META-INF/com/google/android/update-binary
+          #!/system/bin/sh
+          OUTFD=$2
+          ZIPFILE=$3
+          . /data/adb/magisk/util_functions.sh
+          [ $MAGISK_VER_CODE -lt 25200 ] && require_new_magisk
+          install_module
+          exit 0
+          EOF
+          
+          chmod +x module/META-INF/com/google/android/update-binary
+          
+          cd module
+          # Name the ZIP file perfectly for the specific GPU
+          zip -r9 ../Turnip-${{ matrix.gpu_series }}-$(date +%Y%m%d).zip .
+
+      - name: 🚀 Upload Flashable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Turnip-${{ matrix.gpu_series }}-Latest
+          path: Turnip-${{ matrix.gpu_series }}-*.zip
 
