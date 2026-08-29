@@ -1,23 +1,16 @@
-name: Package Balemuni Turnip Modules (Auto-Fetch)
+name: Package Balemuni Turnip Modules
 
-# THIS IS THE AUTOMATION TRIGGER
 on:
-  workflow_dispatch: # Keeps the manual button just in case you need it
+  workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *' # Runs automatically EVERY DAY at Midnight (00:00 UTC)
+    - cron: '0 0 * * *'
+
+permissions:
+  contents: write
 
 jobs:
-  build-modules:
+  build-and-release:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        variant:
-          - name: Universal
-            filter: UNIVERSAL
-            desc: "All Adreno GPUs (A6xx, A7xx, A8xx / SD 8 Elite)"
-          - name: Ultimate-SD8Gen2
-            filter: ULTIMATE
-            desc: "Optimized for Snapdragon 8 Gen 2 / Adreno 740"
 
     steps:
       - name: 🛠️ Install Utilities
@@ -25,58 +18,51 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl jq unzip zip
 
-      - name: 📥 Fetch and Download ${{ matrix.variant.name }}
+      - name: 📥 Download Balemuni Releases (Universal & Ultimate)
         run: |
-          # Query GitHub API for the absolute latest Balemuni release automatically
+          # Query GitHub API for latest release assets
           RELEASE_JSON=$(curl -s https://api.github.com/repos/Balemuni/Balemunis-Aurora/releases/latest)
           
-          # Match the download URL based on matrix filter
-          DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r --arg FILTER "${{ matrix.variant.filter }}" '.assets[] | select(.name | test($FILTER; "i")) | .browser_download_url' | head -n 1)
+          # Extract download URLs
+          URL_UNIV=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | test("UNIVERSAL"; "i")) | .browser_download_url' | head -n 1)
+          URL_ULTI=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | test("ULTIMATE"; "i")) | .browser_download_url' | head -n 1)
           
-          if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" == "null" ]; then
-            echo "Error: Could not find asset matching ${{ matrix.variant.filter }}"
+          if [ -z "$URL_UNIV" ] || [ "$URL_UNIV" == "null" ]; then
+            echo "Error: Universal asset not found."
             exit 1
           fi
           
-          echo "Downloading from: $DOWNLOAD_URL"
-          curl -L -o driver_input.zip "$DOWNLOAD_URL"
+          if [ -z "$URL_ULTI" ] || [ "$URL_ULTI" == "null" ]; then
+            echo "Error: Ultimate asset not found."
+            exit 1
+          fi
+          
+          curl -L -o universal_input.zip "$URL_UNIV"
+          curl -L -o ultimate_input.zip "$URL_ULTI"
 
-      - name: 📦 Convert to Flashable Magisk / KernelSU Module
+      - name: 📦 Build Universal Module (SD 8 Elite / A8xx / A7xx / A6xx)
         run: |
-          mkdir -p extracted
-          unzip -q driver_input.zip -d extracted/
+          mkdir -p work_univ/extracted
+          unzip -q universal_input.zip -d work_univ/extracted/
+          DRIVER=$(find work_univ/extracted/ -type f -name "*.so" | head -n 1)
           
-          # Find the driver library (.so)
-          DRIVER_FILE=$(find extracted/ -type f -name "*.so" | head -n 1)
+          mkdir -p work_univ/module/system/vendor/lib64/hw
+          mkdir -p work_univ/module/META-INF/com/google/android
           
-          if [ -z "$DRIVER_FILE" ]; then
-            echo "Error: No .so driver file found in the archive."
-            exit 1
-          fi
+          cp "$DRIVER" work_univ/module/system/vendor/lib64/hw/vulkan.adreno.so
           
-          echo "Extracted driver file: $DRIVER_FILE"
-          
-          # Create Magisk / KSU directory tree
-          mkdir -p module/system/vendor/lib64/hw
-          mkdir -p module/META-INF/com/google/android
-          
-          # Overwrite system Adreno Vulkan driver
-          cp "$DRIVER_FILE" module/system/vendor/lib64/hw/vulkan.adreno.so
-          
-          # Create module properties
-          cat <<EOF > module/module.prop
-          id=turnip-balemuni-${{ matrix.variant.name }}
-          name=Turnip Mesa (Balemuni Apex - ${{ matrix.variant.name }})
+          cat <<EOF > work_univ/module/module.prop
+          id=turnip-balemuni-universal
+          name=Turnip Mesa (Balemuni Apex - Universal)
           version=Apex-$(date +%Y%m%d)
           versionCode=$(date +%Y%m%d)
           author=Balemuni (Packaged by GitHub-Actions)
-          description=System-wide Turnip Vulkan driver (${{ matrix.variant.desc }}). Flashable via Magisk / KernelSU.
+          description=System-wide Turnip Vulkan driver for Adreno 6xx, 7xx, and 8xx (Snapdragon 8 Elite).
           EOF
           
-          # Create installer scripts
-          echo "#MAGISK" > module/META-INF/com/google/android/updater-script
+          echo "#MAGISK" > work_univ/module/META-INF/com/google/android/updater-script
           
-          cat << 'EOF' > module/META-INF/com/google/android/update-binary
+          cat << 'EOF' > work_univ/module/META-INF/com/google/android/update-binary
           #!/system/bin/sh
           OUTFD=$2
           ZIPFILE=$3
@@ -86,14 +72,64 @@ jobs:
           exit 0
           EOF
           
-          chmod +x module/META-INF/com/google/android/update-binary
+          chmod +x work_univ/module/META-INF/com/google/android/update-binary
           
-          # Create flashable zip
-          cd module
-          zip -r9 ../Turnip-Balemuni-${{ matrix.variant.name }}-$(date +%Y%m%d).zip .
+          cd work_univ/module
+          zip -r9 ../../Turnip-Apex-Universal-$(date +%Y%m%d).zip .
+          cd ../../
 
-      - name: 🚀 Upload Flashable Module
-        uses: actions/upload-artifact@v4
+      - name: 📦 Build Ultimate Module (Snapdragon 8 Gen 2 / A740)
+        run: |
+          mkdir -p work_ulti/extracted
+          unzip -q ultimate_input.zip -d work_ulti/extracted/
+          DRIVER=$(find work_ulti/extracted/ -type f -name "*.so" | head -n 1)
+          
+          mkdir -p work_ulti/module/system/vendor/lib64/hw
+          mkdir -p work_ulti/module/META-INF/com/google/android
+          
+          cp "$DRIVER" work_ulti/module/system/vendor/lib64/hw/vulkan.adreno.so
+          
+          cat <<EOF > work_ulti/module/module.prop
+          id=turnip-balemuni-ultimate
+          name=Turnip Mesa (Balemuni Apex - Ultimate SD8G2)
+          version=Apex-$(date +%Y%m%d)
+          versionCode=$(date +%Y%m%d)
+          author=Balemuni (Packaged by GitHub-Actions)
+          description=System-wide Turnip Vulkan driver optimized for Snapdragon 8 Gen 2 (Adreno 740).
+          EOF
+          
+          echo "#MAGISK" > work_ulti/module/META-INF/com/google/android/updater-script
+          
+          cat << 'EOF' > work_ulti/module/META-INF/com/google/android/update-binary
+          #!/system/bin/sh
+          OUTFD=$2
+          ZIPFILE=$3
+          . /data/adb/magisk/util_functions.sh
+          [ $MAGISK_VER_CODE -lt 25200 ] && require_new_magisk
+          install_module
+          exit 0
+          EOF
+          
+          chmod +x work_ulti/module/META-INF/com/google/android/update-binary
+          
+          cd work_ulti/module
+          zip -r9 ../../Turnip-Apex-Ultimate-SD8G2-$(date +%Y%m%d).zip .
+          cd ../../
+
+      - name: 🚀 Publish Both Modules to GitHub Releases
+        uses: softprops/action-gh-release@v2
         with:
-          name: Turnip-Balemuni-${{ matrix.variant.name }}-Flashable
-          path: Turnip-Balemuni-*.zip
+          tag_name: v$(date +%Y%m%d-%H%M)
+          name: "Balemuni Apex Turnip Modules ($(date +%Y-%m-%d))"
+          body: |
+            Automated flashable builds for Magisk and KernelSU.
+            
+            ### Included Files:
+            * **Turnip-Apex-Universal**: Supports Adreno 6xx, 7xx, and 8xx (Snapdragon 8 Elite / A810, A825, A830).
+            * **Turnip-Apex-Ultimate-SD8G2**: Optimized specifically for Snapdragon 8 Gen 2 (Adreno 740).
+          files: |
+            Turnip-Apex-Universal-*.zip
+            Turnip-Apex-Ultimate-SD8G2-*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
