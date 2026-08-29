@@ -1,11 +1,20 @@
-name: Package Balemuni Turnip for Magisk / KSU
+name: Package Balemuni Turnip Modules (Universal & Ultimate)
 
 on:
   workflow_dispatch:
 
 jobs:
-  package-module:
+  build-modules:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        variant:
+          - name: Universal
+            filter: UNIVERSAL
+            desc: "All Adreno GPUs (A6xx, A7xx, A8xx / SD 8 Elite)"
+          - name: Ultimate-SD8Gen2
+            filter: ULTIMATE
+            desc: "Optimized for Snapdragon 8 Gen 2 / Adreno 740"
 
     steps:
       - name: 🛠️ Install Utilities
@@ -13,29 +22,28 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl jq unzip zip
 
-      - name: 📥 Download Latest Balemuni Universal Release
+      - name: 📥 Fetch and Download ${{ matrix.variant.name }}
         run: |
-          # Fetch the latest release metadata from GitHub API
+          # Query GitHub API for the latest Balemuni release
           RELEASE_JSON=$(curl -s https://api.github.com/repos/Balemuni/Balemunis-Aurora/releases/latest)
           
-          # Find the download URL for the UNIVERSAL zip file
-          DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | contains("UNIVERSAL")) | .browser_download_url' | head -n 1)
+          # Match the download URL based on matrix filter
+          DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r --arg FILTER "${{ matrix.variant.filter }}" '.assets[] | select(.name | test($FILTER; "i")) | .browser_download_url' | head -n 1)
           
           if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" == "null" ]; then
-            echo "Error: Could not find Universal zip file in latest release."
+            echo "Error: Could not find asset matching ${{ matrix.variant.filter }}"
             exit 1
           fi
           
           echo "Downloading from: $DOWNLOAD_URL"
-          curl -L -o turnip_input.zip "$DOWNLOAD_URL"
+          curl -L -o driver_input.zip "$DOWNLOAD_URL"
 
-      - name: 📦 Build Magisk & KernelSU Module
+      - name: 📦 Convert to Flashable Magisk / KernelSU Module
         run: |
-          # Extract the emulator driver zip
           mkdir -p extracted
-          unzip -q turnip_input.zip -d extracted/
+          unzip -q driver_input.zip -d extracted/
           
-          # Find the compiled .so driver file
+          # Find the driver library (.so)
           DRIVER_FILE=$(find extracted/ -type f -name "*.so" | head -n 1)
           
           if [ -z "$DRIVER_FILE" ]; then
@@ -43,29 +51,28 @@ jobs:
             exit 1
           fi
           
-          echo "Found driver library: $DRIVER_FILE"
+          echo "Extracted driver file: $DRIVER_FILE"
           
-          # Create standard Magisk / KSU filesystem structure
+          # Create Magisk / KSU directory tree
           mkdir -p module/system/vendor/lib64/hw
           mkdir -p module/META-INF/com/google/android
           
-          # Copy and rename driver to replace system Adreno Vulkan
+          # Overwrite system Adreno Vulkan driver
           cp "$DRIVER_FILE" module/system/vendor/lib64/hw/vulkan.adreno.so
           
-          # 1. Create module.prop
+          # Create module properties
           cat <<EOF > module/module.prop
-          id=turnip-balemuni-universal
-          name=Turnip Mesa (Balemuni Apex Universal - A8xx/A7xx/A6xx)
+          id=turnip-balemuni-${{ matrix.variant.name }}
+          name=Turnip Mesa (Balemuni Apex - ${{ matrix.variant.name }})
           version=Apex-$(date +%Y%m%d)
           versionCode=$(date +%Y%m%d)
           author=Balemuni (Packaged by GitHub-Actions)
-          description=System-wide Turnip Mesa Vulkan driver with full Adreno 8-series (SD 8 Elite), 7-series, and 6-series support.
+          description=System-wide Turnip Vulkan driver (${{ matrix.variant.desc }}). Flashable via Magisk / KernelSU.
           EOF
           
-          # 2. Create updater-script
+          # Create installer scripts
           echo "#MAGISK" > module/META-INF/com/google/android/updater-script
           
-          # 3. Create update-binary
           cat << 'EOF' > module/META-INF/com/google/android/update-binary
           #!/system/bin/sh
           OUTFD=$2
@@ -78,12 +85,12 @@ jobs:
           
           chmod +x module/META-INF/com/google/android/update-binary
           
-          # Zip the final flashable module
+          # Create flashable zip
           cd module
-          zip -r9 ../Turnip-Apex-Universal-Magisk-$(date +%Y%m%d).zip .
+          zip -r9 ../Turnip-Balemuni-${{ matrix.variant.name }}-$(date +%Y%m%d).zip .
 
       - name: 🚀 Upload Flashable Module
         uses: actions/upload-artifact@v4
         with:
-          name: Turnip-Apex-Universal-Magisk
-          path: Turnip-Apex-Universal-Magisk-*.zip
+          name: Turnip-Balemuni-${{ matrix.variant.name }}-Flashable
+          path: Turnip-Balemuni-*.zip
