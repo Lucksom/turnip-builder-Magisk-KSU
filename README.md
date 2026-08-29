@@ -62,4 +62,3 @@ This project is simply an automated packager. All credit for the actual driver c
 **Disclaimer:** This is an unofficial, community-maintained automation tool. We are not responsible for bricked devices, bootloops, or voided warranties. Please understand what you are flashing before proceeding. 
 
 The build scripts in this repository are licensed under the MIT License. The packaged Mesa Turnip drivers retain their original upstream MIT licensing.
-# turnip-builder-Magisk-KSU
