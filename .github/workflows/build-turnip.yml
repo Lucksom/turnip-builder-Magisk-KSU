@@ -62,7 +62,7 @@ jobs:
           description=System-wide Turnip Vulkan driver for Adreno 6xx, 7xx, and 8xx (Snapdragon 8 Elite).
           EOF
           
-          # customize.sh (Installer logic)
+          # customize.sh (Installer UI)
           cat << 'EOF' > work_univ/module/customize.sh
           ui_print "************************************************"
           ui_print "  Turnip Mesa Vulkan - Universal Edition        "
@@ -80,13 +80,19 @@ jobs:
           ui_print "✅ Flashed successfully! Please reboot your device."
           EOF
           
-          # uninstall.sh (Cleanup logic)
+          # uninstall.sh (Advanced Shader Cache Cleanup)
           cat << 'EOF' > work_univ/module/uninstall.sh
           #!/system/bin/sh
-          rm -rf /data/local/tmp/vulkan_cache* 2>/dev/null
+          find /data/user_de/*/*/*cache/* -iname "*shader*" -exec rm -rf {} + 2>/dev/null
+          find /data/data/* -iname "*shader*" -exec rm -rf {} + 2>/dev/null
+          find /data/data/* -iname "*graphitecache*" -exec rm -rf {} + 2>/dev/null
+          find /data/data/* -iname "*gpucache*" -exec rm -rf {} + 2>/dev/null
+          find /data_mirror/data*/*/*/*/* -iname "*shader*" -exec rm -rf {} + 2>/dev/null
+          find /data_mirror/data*/*/*/*/* -iname "*graphitecache*" -exec rm -rf {} + 2>/dev/null
+          find /data_mirror/data*/*/*/*/* -iname "*gpucache*" -exec rm -rf {} + 2>/dev/null
           EOF
           
-          # Magisk updater files
+          # Magisk updater scripts
           echo "#MAGISK" > work_univ/module/META-INF/com/google/android/updater-script
           cat << 'EOF' > work_univ/module/META-INF/com/google/android/update-binary
           #!/system/bin/sh
@@ -130,7 +136,7 @@ jobs:
           description=System-wide Turnip Vulkan driver optimized for Snapdragon 8 Gen 2 (Adreno 740).
           EOF
           
-          # customize.sh (Installer logic)
+          # customize.sh (Installer UI)
           cat << 'EOF' > work_ulti/module/customize.sh
           ui_print "************************************************"
           ui_print "  Turnip Mesa Vulkan - Ultimate Edition         "
@@ -148,13 +154,19 @@ jobs:
           ui_print "✅ Flashed successfully! Please reboot your device."
           EOF
           
-          # uninstall.sh (Cleanup logic)
+          # uninstall.sh (Advanced Shader Cache Cleanup)
           cat << 'EOF' > work_ulti/module/uninstall.sh
           #!/system/bin/sh
-          rm -rf /data/local/tmp/vulkan_cache* 2>/dev/null
+          find /data/user_de/*/*/*cache/* -iname "*shader*" -exec rm -rf {} + 2>/dev/null
+          find /data/data/* -iname "*shader*" -exec rm -rf {} + 2>/dev/null
+          find /data/data/* -iname "*graphitecache*" -exec rm -rf {} + 2>/dev/null
+          find /data/data/* -iname "*gpucache*" -exec rm -rf {} + 2>/dev/null
+          find /data_mirror/data*/*/*/*/* -iname "*shader*" -exec rm -rf {} + 2>/dev/null
+          find /data_mirror/data*/*/*/*/* -iname "*graphitecache*" -exec rm -rf {} + 2>/dev/null
+          find /data_mirror/data*/*/*/*/* -iname "*gpucache*" -exec rm -rf {} + 2>/dev/null
           EOF
           
-          # Magisk updater files
+          # Magisk updater scripts
           echo "#MAGISK" > work_ulti/module/META-INF/com/google/android/updater-script
           cat << 'EOF' > work_ulti/module/META-INF/com/google/android/update-binary
           #!/system/bin/sh
@@ -174,6 +186,9 @@ jobs:
           zip -r9 ../../Turnip-Apex-Ultimate-SD8G2-$(date +%Y%m%d).zip .
           cd ../../
 
+      # ----------------------------------------------------
+      # PUBLISH TO RELEASES
+      # ----------------------------------------------------
       - name: 🏷️ Set Release Tag variables
         run: |
           echo "TAG_NAME=v$(date +%Y%m%d-%H%M)" >> $GITHUB_ENV
