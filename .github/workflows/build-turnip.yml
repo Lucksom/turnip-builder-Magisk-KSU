@@ -20,10 +20,8 @@ jobs:
 
       - name: 📥 Download Balemuni Releases (Universal & Ultimate)
         run: |
-          # Query GitHub API for latest release assets
           RELEASE_JSON=$(curl -s https://api.github.com/repos/Balemuni/Balemunis-Aurora/releases/latest)
           
-          # Extract download URLs
           URL_UNIV=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | test("UNIVERSAL"; "i")) | .browser_download_url' | head -n 1)
           URL_ULTI=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | test("ULTIMATE"; "i")) | .browser_download_url' | head -n 1)
           
@@ -116,13 +114,20 @@ jobs:
           zip -r9 ../../Turnip-Apex-Ultimate-SD8G2-$(date +%Y%m%d).zip .
           cd ../../
 
+      # NEW STEP: Generate the date safely into an environment variable
+      - name: 🏷️ Set Release Tag variables
+        run: |
+          echo "TAG_NAME=v$(date +%Y%m%d-%H%M)" >> $GITHUB_ENV
+          echo "RELEASE_NAME=Turnip Apex Flashable Modules ($(date +%Y-%m-%d))" >> $GITHUB_ENV
+
+      # UPDATED STEP: v3 used to fix Node 20 deprecation, uses env variables safely
       - name: 🚀 Publish Both Modules to GitHub Releases
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
-          tag_name: v$(date +%Y%m%d-%H%M)
-          name: "Balemuni Apex Turnip Modules ($(date +%Y-%m-%d))"
+          tag_name: ${{ env.TAG_NAME }}
+          name: ${{ env.RELEASE_NAME }}
           body: |
-            Automated flashable builds for Magisk and KernelSU.
+            Automated flashable builds for Magisk and KernelSU based on Balemuni's latest release.
             
             ### Included Files:
             * **Turnip-Apex-Universal**: Supports Adreno 6xx, 7xx, and 8xx (Snapdragon 8 Elite / A810, A825, A830).
@@ -132,4 +137,3 @@ jobs:
             Turnip-Apex-Ultimate-SD8G2-*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
