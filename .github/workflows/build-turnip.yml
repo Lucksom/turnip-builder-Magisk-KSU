@@ -1,7 +1,10 @@
-name: Package Balemuni Turnip Modules (Universal & Ultimate)
+name: Package Balemuni Turnip Modules (Auto-Fetch)
 
+# THIS IS THE AUTOMATION TRIGGER
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Keeps the manual button just in case you need it
+  schedule:
+    - cron: '0 0 * * *' # Runs automatically EVERY DAY at Midnight (00:00 UTC)
 
 jobs:
   build-modules:
@@ -24,7 +27,7 @@ jobs:
 
       - name: 📥 Fetch and Download ${{ matrix.variant.name }}
         run: |
-          # Query GitHub API for the latest Balemuni release
+          # Query GitHub API for the absolute latest Balemuni release automatically
           RELEASE_JSON=$(curl -s https://api.github.com/repos/Balemuni/Balemunis-Aurora/releases/latest)
           
           # Match the download URL based on matrix filter
