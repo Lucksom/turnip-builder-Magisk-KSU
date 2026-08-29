@@ -38,6 +38,9 @@ jobs:
           curl -L -o universal_input.zip "$URL_UNIV"
           curl -L -o ultimate_input.zip "$URL_ULTI"
 
+      # ----------------------------------------------------
+      # BUILD UNIVERSAL MODULE
+      # ----------------------------------------------------
       - name: 📦 Build Universal Module (SD 8 Elite / A8xx / A7xx / A6xx)
         run: |
           mkdir -p work_univ/extracted
@@ -49,6 +52,7 @@ jobs:
           
           cp "$DRIVER" work_univ/module/system/vendor/lib64/hw/vulkan.adreno.so
           
+          # module.prop
           cat <<EOF > work_univ/module/module.prop
           id=turnip-balemuni-universal
           name=Turnip Mesa (Balemuni Apex - Universal)
@@ -58,8 +62,32 @@ jobs:
           description=System-wide Turnip Vulkan driver for Adreno 6xx, 7xx, and 8xx (Snapdragon 8 Elite).
           EOF
           
-          echo "#MAGISK" > work_univ/module/META-INF/com/google/android/updater-script
+          # customize.sh (Installer logic)
+          cat << 'EOF' > work_univ/module/customize.sh
+          ui_print "************************************************"
+          ui_print "  Turnip Mesa Vulkan - Universal Edition        "
+          ui_print "  Adreno 6xx / 7xx / 8xx (SD 8 Elite)           "
+          ui_print "************************************************"
+          ui_print "- Checking system architecture..."
+          if [ "$ARCH" != "arm64" ]; then
+              abort "! Error: Only ARM64 (64-bit) devices are supported!"
+          fi
+          if [ "$API" -lt 33 ]; then
+              ui_print "! Warning: Android 13+ (API 33+) recommended."
+          fi
+          ui_print "- Applying systemless driver overlay..."
+          ui_print " "
+          ui_print "✅ Flashed successfully! Please reboot your device."
+          EOF
           
+          # uninstall.sh (Cleanup logic)
+          cat << 'EOF' > work_univ/module/uninstall.sh
+          #!/system/bin/sh
+          rm -rf /data/local/tmp/vulkan_cache* 2>/dev/null
+          EOF
+          
+          # Magisk updater files
+          echo "#MAGISK" > work_univ/module/META-INF/com/google/android/updater-script
           cat << 'EOF' > work_univ/module/META-INF/com/google/android/update-binary
           #!/system/bin/sh
           OUTFD=$2
@@ -71,11 +99,16 @@ jobs:
           EOF
           
           chmod +x work_univ/module/META-INF/com/google/android/update-binary
+          chmod +x work_univ/module/customize.sh
+          chmod +x work_univ/module/uninstall.sh
           
           cd work_univ/module
           zip -r9 ../../Turnip-Apex-Universal-$(date +%Y%m%d).zip .
           cd ../../
 
+      # ----------------------------------------------------
+      # BUILD ULTIMATE MODULE
+      # ----------------------------------------------------
       - name: 📦 Build Ultimate Module (Snapdragon 8 Gen 2 / A740)
         run: |
           mkdir -p work_ulti/extracted
@@ -87,6 +120,7 @@ jobs:
           
           cp "$DRIVER" work_ulti/module/system/vendor/lib64/hw/vulkan.adreno.so
           
+          # module.prop
           cat <<EOF > work_ulti/module/module.prop
           id=turnip-balemuni-ultimate
           name=Turnip Mesa (Balemuni Apex - Ultimate SD8G2)
@@ -96,8 +130,32 @@ jobs:
           description=System-wide Turnip Vulkan driver optimized for Snapdragon 8 Gen 2 (Adreno 740).
           EOF
           
-          echo "#MAGISK" > work_ulti/module/META-INF/com/google/android/updater-script
+          # customize.sh (Installer logic)
+          cat << 'EOF' > work_ulti/module/customize.sh
+          ui_print "************************************************"
+          ui_print "  Turnip Mesa Vulkan - Ultimate Edition         "
+          ui_print "  Optimized for SD 8 Gen 2 / Adreno 740         "
+          ui_print "************************************************"
+          ui_print "- Checking system architecture..."
+          if [ "$ARCH" != "arm64" ]; then
+              abort "! Error: Only ARM64 (64-bit) devices are supported!"
+          fi
+          if [ "$API" -lt 33 ]; then
+              ui_print "! Warning: Android 13+ (API 33+) recommended."
+          fi
+          ui_print "- Applying tuned SD8G2 driver overlay..."
+          ui_print " "
+          ui_print "✅ Flashed successfully! Please reboot your device."
+          EOF
           
+          # uninstall.sh (Cleanup logic)
+          cat << 'EOF' > work_ulti/module/uninstall.sh
+          #!/system/bin/sh
+          rm -rf /data/local/tmp/vulkan_cache* 2>/dev/null
+          EOF
+          
+          # Magisk updater files
+          echo "#MAGISK" > work_ulti/module/META-INF/com/google/android/updater-script
           cat << 'EOF' > work_ulti/module/META-INF/com/google/android/update-binary
           #!/system/bin/sh
           OUTFD=$2
@@ -109,25 +167,25 @@ jobs:
           EOF
           
           chmod +x work_ulti/module/META-INF/com/google/android/update-binary
+          chmod +x work_ulti/module/customize.sh
+          chmod +x work_ulti/module/uninstall.sh
           
           cd work_ulti/module
           zip -r9 ../../Turnip-Apex-Ultimate-SD8G2-$(date +%Y%m%d).zip .
           cd ../../
 
-      # NEW STEP: Generate the date safely into an environment variable
       - name: 🏷️ Set Release Tag variables
         run: |
           echo "TAG_NAME=v$(date +%Y%m%d-%H%M)" >> $GITHUB_ENV
           echo "RELEASE_NAME=Turnip Apex Flashable Modules ($(date +%Y-%m-%d))" >> $GITHUB_ENV
 
-      # UPDATED STEP: v3 used to fix Node 20 deprecation, uses env variables safely
       - name: 🚀 Publish Both Modules to GitHub Releases
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.TAG_NAME }}
           name: ${{ env.RELEASE_NAME }}
           body: |
-            Automated flashable builds for Magisk and KernelSU based on Balemuni's latest release.
+            Automated flashable builds for Magisk, KernelSU, and APatch based on Balemuni's latest release.
             
             ### Included Files:
             * **Turnip-Apex-Universal**: Supports Adreno 6xx, 7xx, and 8xx (Snapdragon 8 Elite / A810, A825, A830).
