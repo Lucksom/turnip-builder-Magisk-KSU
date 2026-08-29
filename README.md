@@ -1,7 +1,5 @@
 # 🚀 Turnip Mesa Vulkan Drivers – Flashable Modules for Magisk & KernelSU
 
-![Build Status](https://img.shields.io/github/actions/workflow/status/YOUR-USERNAME/YOUR-REPO/build-turnip.yml?label=Auto-Builder&style=for-the-badge)
-![Latest Release](https://img.shields.io/github/v/release/YOUR-USERNAME/YOUR-REPO?label=Latest%20Release&style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)
 
 This repository provides **automatically built, system-wide flashable Magisk / KernelSU / APatch modules** for the highly optimized Mesa Turnip Vulkan drivers compiled by [Balemuni](https://github.com/Balemuni/Balemunis-Aurora).
